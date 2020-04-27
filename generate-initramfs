@@ -1,0 +1,125 @@
+#!/bin/sh
+#
+# generate-initramfs for Arch Linux by Rickard "shelter" Åberg
+#
+# Helper script to make it easier to generate initramfs for custom kernels
+#
+# Version history
+# -
+# 0.0.3 - added boot/kernel directory option, added more checks
+# 0.0.2 - improved code, added checks
+# 0.0.1 - first version
+# -
+
+# global variables - don't touch
+BOOTDIR=/boot
+COMP=gzip
+FPACMAN=/usr/bin/pacman
+FZSTD=/usr/bin/zstd
+FMKINIT=/sbin/mkinitcpio
+SVER=0.0.3
+# end variables
+
+# functions
+function init_help () {
+	echo "Usage: $0 [OPTION]"
+	echo "Generate new initramfs for Arch Linux"
+	echo -e "\nOptions:"
+	echo -e "  -c COMPRESSION  Select compression, gzip (default) or zstd.\n"
+	echo -e "  -a  Generate initramfs for all kernels, including the Arch Linux kernel."
+	echo -e "      This is usually not needed since Arch Linux initramfs\n      should always be up to date.\n"
+	echo -e "  -b BOOTDIR  Specify boot/kernel directory (default /boot),\n      for advanced use only.\n"
+	echo -e "  -v  Prints version\n"
+	exit
+}
+
+function pacman_missing () {
+	echo "ERROR! $FPACMAN not found! This script is written for Arch Linux!"
+	echo -e "If you're running Arch Linux and $FPACMAN is missing, your system is\nBROKEN!\n"
+	exit
+}
+
+function install_zstd () {
+	echo "Error! $FZSTD not found! Can't comporess initramffs using zstd compression."
+	read -r -p "Do you want to install now? [Y/n] " response
+	response=${response,,} # tolower
+	if [[ "$response" =~ ^(yes|y| ) ]] || [[ -z "$response" ]]; then
+		if [ -f "$FPACMAN" ]
+		then
+			$FPACMAN -Sy zstd
+		else
+			pacman_missing
+		fi
+	fi
+	exit
+}
+# end functions
+
+# get options
+while getopts "avhc:b:" opt; do
+    case $opt in
+    a) GENALL=1 ;; # Handle initramfs for Arch Linux kernel
+    c) COMP="$OPTARG" ;; # Handle compression argument
+    b) BOOTDIR="$OPTARG" ;; # Hande boot/kernel directory argument
+    v) echo "$0 Version $SVER";exit ;;
+    h) init_help ;; # print help
+    \?) init_help ;; # Handle error: unknown option or missing required argument.
+    esac
+done
+
+# check boot arg.
+if [ ! -d "$BOOTDIR" ]
+then
+	echo -e "Error! $BOOT directory not exist! Cannot continue, exiting...\n"
+	exit
+fi
+
+# check compression arg.
+if [ "$COMP" == "gzip" ] || [ "$COMP" == "zstd" ]
+
+then
+	if [ "$COMP" = "zstd" ] && [ -f "$FZSTD" ]
+	then
+		# zstd found, go ahead and use it
+		COMP=zstd
+	elif [ "$COMP" = "zstd" ] # match compression argument if zstd not found in path
+	then
+		install_zstd
+	exit
+	fi
+	# gzip is default and defined so no need to handle it.
+else
+	# error handling for invalid compression options
+	echo -e "Error! Only gzip or zstd compression is supported!\n"
+	init_help
+fi
+
+# final checks before continuing
+if [ ! -f "$FMKINIT" ] # does mkinitcpio exist?
+then
+	if [ -f "$FPACMAN" ] # check if pacman is present
+	then
+		echo "The mkinitcpio package is missing on your system, installing..."
+		$FPACMAN -Sy mkinitcpio
+	else
+		pacman_missing
+	fi
+fi
+
+# generate the initramfs
+for KERNEL in "$BOOTDIR"/vmlinuz-*
+do
+if [ -e "$KERNEL" ] ;then # Make sure we find kernel images to run mkinitramfs for.
+	if [ "$GENALL" ]
+	then
+		$FMKINIT -z $COMP -g $BOOTDIR/initramfs-${KERNEL#*-}.img -k ${KERNEL#*-}
+	else
+        	if [ "$KERNEL" != "$BOOTDIR/vmlinuz-linux" ]
+        	then
+                	$FMKINIT -z $COMP -g $BOOTDIR/initramfs-${KERNEL#*-}.img -k ${KERNEL#*-}
+        	fi
+	fi
+else
+	echo -e "No kernels found in $BOOTDIR, aborting...\n"
+fi
+done
