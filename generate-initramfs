@@ -6,6 +6,7 @@
 #
 # Version history
 # -
+# 0.0.4 - added grub support and option.
 # 0.0.3 - added boot/kernel directory option, added more checks
 # 0.0.2 - improved code, added checks
 # 0.0.1 - first version
@@ -17,7 +18,8 @@ COMP=gzip
 FPACMAN=/usr/bin/pacman
 FZSTD=/usr/bin/zstd
 FMKINIT=/sbin/mkinitcpio
-SVER=0.0.3
+FGRUB=/sbin/grub-mkconfig
+SVER=0.0.4
 # end variables
 
 # functions
@@ -25,10 +27,11 @@ function init_help () {
 	echo "Usage: $0 [OPTION]"
 	echo "Generate new initramfs for Arch Linux"
 	echo -e "\nOptions:"
-	echo -e "  -c COMPRESSION  Select compression, gzip (default) or zstd.\n"
 	echo -e "  -a  Generate initramfs for all kernels, including the Arch Linux kernel."
 	echo -e "      This is usually not needed since Arch Linux initramfs\n      should always be up to date.\n"
 	echo -e "  -b BOOTDIR  Specify boot/kernel directory (default /boot),\n      for advanced use only.\n"
+	echo -e "  -c COMPRESSION  Select compression, gzip (default) or zstd.\n"
+	echo -e "  -d Don't update grub bootloader after updating the initramfs.\n"
 	echo -e "  -v  Prints version\n"
 	exit
 }
@@ -56,11 +59,12 @@ function install_zstd () {
 # end functions
 
 # get options
-while getopts "avhc:b:" opt; do
+while getopts "advhc:b:" opt; do
     case $opt in
     a) GENALL=1 ;; # Handle initramfs for Arch Linux kernel
-    c) COMP="$OPTARG" ;; # Handle compression argument
     b) BOOTDIR="$OPTARG" ;; # Hande boot/kernel directory argument
+    c) COMP="$OPTARG" ;; # Handle compression argument
+    d) SKIPGRUB=1 ;; # Handle skip grub update argument
     v) echo "$0 Version $SVER";exit ;;
     h) init_help ;; # print help
     \?) init_help ;; # Handle error: unknown option or missing required argument.
@@ -121,5 +125,19 @@ if [ -e "$KERNEL" ] ;then # Make sure we find kernel images to run mkinitramfs f
 	fi
 else
 	echo -e "No kernels found in $BOOTDIR, aborting...\n"
+	exit
 fi
 done
+
+# check if we should update grub.
+if [ ! "$SKIPGRUB" ] && [ -f "$FGRUB" ]
+then
+	echo "Grub bootloader found, updating..."
+	"$FGRUB" -o /boot/grub/grub.cfg
+elif [ ! -f "$FGRUB" ]
+then
+	echo -e "Grub bootloader not found, please update your bootloader manually if needed.\n"
+	exit
+else
+	echo -e "Skipping grub bootloader update...\n"
+fi
