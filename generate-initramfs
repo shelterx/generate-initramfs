@@ -19,6 +19,7 @@ FPACMAN=/usr/bin/pacman
 FZSTD=/usr/bin/zstd
 FMKINIT=/sbin/mkinitcpio
 FGRUB=/sbin/grub-mkconfig
+FGRUBCFG=/boot/grub/grub.cfg
 SVER=0.0.4
 # end variables
 
@@ -130,10 +131,10 @@ fi
 done
 
 # check if we should update grub.
-if [ ! "$SKIPGRUB" ] && [ -f "$FGRUB" ]
+if [ ! "$SKIPGRUB" ] && [ -f "$FGRUB" ] && [ -f "$FGRUBCFG" ]
 then
 	echo "Grub bootloader found, updating..."
-	"$FGRUB" -o /boot/grub/grub.cfg
+	"$FGRUB" -o "$FGRUBCFG"
 elif [ ! -f "$FGRUB" ]
 then
 	echo -e "Grub bootloader not found, please update your bootloader manually if needed.\n"
